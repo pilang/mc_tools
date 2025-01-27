@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -e
+# Token used for pausing monitoring
+source /usr/local/bin/tokens
+echo ${TEAM_TOKEN}
+
+#Pause monitor
+curl -s -o /dev/null --request PATCH \
+--url https://uptime.betterstack.com/api/v2/monitors/${M_ID} \
+--header "Authorization: Bearer ${TEAM_TOKEN}" \
+--header 'Content-Type: application/json' \
+--data '{"paused": true}'
+
