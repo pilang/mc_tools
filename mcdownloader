@@ -1,0 +1,56 @@
+#!/bin/bash
+
+set -e
+
+if  [ "$EUID" -ne 0 ]
+then
+       	echo "Please run as root"
+	exit
+fi
+
+#Version of minecraft running
+# do not change without considering consequences
+version="1.21.4"
+logfile="/var/log/mcdownloader"
+
+
+current=$(jq -r </var/minecraft/version_history.json .currentVersion | cut -d "-" -f2 | grep -E -o '[0-9]+')
+echo "current: $current"
+latest=$(curl -s https://api.papermc.io/v2/projects/paper/versions/${version} | jq -r .builds[-1])
+echo "latest: $latest"
+date "+%Y-%m-%d %H:%M:%S" >> $logfile 
+if [ $current != $latest ]
+then 
+	#Pause monitor
+	/usr/local/bin/better.pause
+
+	currentlinkedfile=$(readlink -f /var/minecraft/paper.jar)
+
+	sudo -u minecraft wget -P /var/minecraft https://api.papermc.io/v2/projects/paper/versions/${version}/builds/${latest}/downloads/paper-${version}-${latest}.jar && echo "Downloaded ver: $version build: $latest" >> $logfile
+	sudo -u minecraft ln -sf paper-${version}-${latest}.jar /var/minecraft/paper.jar && echo "linked to new version" >> $logfile
+
+	newlinkedfile=$(readlink -f /var/minecraft/paper.jar)
+
+#	echo "${latest}" > $currentfile
+
+	systemctl stop minecraft.service && echo "Stopped service" >> $logfile
+	sleep 20
+	systemctl start minecraft.service && echo "Started service" >> $logfile
+	sleep 45
+
+	#Resume monitor
+	/usr/local/bin/better.resume
+
+        # in some strange way it deleted itself, maybe downloaded same version in rare case ...
+	# so, a check for not deleting newly downloaded file
+        if [ "$currentlinkedfile" != "$newlinkedfile" ]
+	then
+		rm $currentlinkedfile
+	fi
+
+else
+	echo "Up to date" >> $logfile
+#	logger "Up to date"
+
+fi
+echo "----------------" >> $logfile
